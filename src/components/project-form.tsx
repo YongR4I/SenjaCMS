@@ -36,12 +36,13 @@ import {
   projects,
   type Project,
 } from "@/data/projects"
+import { usePartnersStore } from "@/stores/partners-store"
+import { useProjectsStore } from "@/stores/projects-store"
 import {
   technologyPartners,
   type TechnologyPartner,
 } from "@/data/partners"
 
-const PROJECTS_STORAGE_KEY = "senja-cms-projects"
 const PARTNERS_STORAGE_KEY = "senja-cms-partners"
 const textareaClassName =
   "min-h-32 w-full rounded-xl border border-input bg-white px-3.5 py-3 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/20"
@@ -98,9 +99,20 @@ export function ProjectForm({
     React.useState<ProjectGalleryImage>(emptyGalleryImage)
   const [availablePartners, setAvailablePartners] =
     React.useState<TechnologyPartner[]>(technologyPartners)
+  const storePartners = usePartnersStore((s) => s.partners)
+  const partnersLoaded = usePartnersStore((s) => s.isLoaded)
+  const loadPartners = usePartnersStore((s) => s.load)
+
+  React.useEffect(() => {
+    if (!partnersLoaded) void loadPartners()
+  }, [partnersLoaded, loadPartners])
 
   React.useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
+      if (partnersLoaded && storePartners.length > 0) {
+        setAvailablePartners(storePartners)
+        return
+      }
       const storedPartners = window.localStorage.getItem(PARTNERS_STORAGE_KEY)
       if (!storedPartners) return
 
@@ -112,13 +124,13 @@ export function ProjectForm({
     })
 
     return () => window.cancelAnimationFrame(frame)
-  }, [])
+  }, [partnersLoaded, storePartners])
 
   const setField = <Key extends keyof Project>(field: Key, value: Project[Key]) => {
     setForm((current) => ({ ...current, [field]: value }))
   }
 
-  const saveProject = (event: React.FormEvent<HTMLFormElement>) => {
+  const saveProject = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setIsSaving(true)
 
@@ -131,25 +143,14 @@ export function ProjectForm({
       gallery: form.gallery.filter((image) => image.src.trim()),
     }
 
-    let currentProjects = projects
-    const storedProjects = window.localStorage.getItem(PROJECTS_STORAGE_KEY)
-
-    if (storedProjects) {
-      try {
-        currentProjects = JSON.parse(storedProjects) as Project[]
-      } catch {
-        currentProjects = projects
-      }
+    try {
+      // zustand projects-store: POST/PUT /projects when authed, cache fallback.
+      await useProjectsStore.getState().saveProject(project, initialProject?.slug)
+      router.push(mode === "edit" ? `/our-work/${project.slug}` : "/our-work")
+      router.refresh()
+    } finally {
+      setIsSaving(false)
     }
-
-    const originalSlug = initialProject?.slug ?? project.slug
-    const nextProjects = [
-      project,
-      ...currentProjects.filter((item) => item.slug !== originalSlug),
-    ]
-    window.localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(nextProjects))
-    router.push(mode === "edit" ? `/our-work/${project.slug}` : "/our-work")
-    router.refresh()
   }
 
   const openAddGalleryImage = () => {

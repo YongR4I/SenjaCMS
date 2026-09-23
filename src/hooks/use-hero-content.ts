@@ -2,33 +2,16 @@
 
 import * as React from "react"
 
-import {
-  defaultHeroContent,
-  HERO_STORAGE_KEY,
-  type HeroContent,
-} from "@/data/hero"
+import { useHeroStore } from "@/stores/hero-store";
 
 export function useHeroContent() {
-  const [content, setContent] = React.useState<HeroContent>(defaultHeroContent)
-  const [isLoaded, setIsLoaded] = React.useState(false)
+  const content = useHeroStore((s) => s.content)
+  const isLoaded = useHeroStore((s) => s.isLoaded)
+  const load = useHeroStore((s) => s.load)
 
   React.useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      const storedContent = window.localStorage.getItem(HERO_STORAGE_KEY)
-
-      if (storedContent) {
-        try {
-          setContent(JSON.parse(storedContent) as HeroContent)
-        } catch {
-          window.localStorage.removeItem(HERO_STORAGE_KEY)
-        }
-      }
-
-      setIsLoaded(true)
-    })
-
-    return () => window.cancelAnimationFrame(frame)
-  }, [])
+    if (!isLoaded) void load()
+  }, [isLoaded, load])
 
   return { content, isLoaded }
 }

@@ -13,6 +13,7 @@ import {
 
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
+import { useAuthStore } from "@/stores/auth-store"
 import {
   Sidebar,
   SidebarContent,
@@ -23,23 +24,29 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 
-const data = {
-  user: {
-    name: "Senja Admin",
-    email: "admin@senja.id",
-    avatar: "",
-  },
-  navMain: [
-    { title: "Dashboard", url: "/dashboard", icon: <LayoutDashboardIcon /> },
-    { title: "Hero", url: "/hero", icon: <HomeIcon /> },
-    { title: "About", url: "/about", icon: <InfoIcon /> },
-    { title: "Our Works", url: "/our-work", icon: <BriefcaseIcon /> },
-    { title: "Partners", url: "/partners", icon: <UsersIcon /> },
-    { title: "Contact", url: "/contact", icon: <MailIcon /> },
-  ],
-}
+const NAV_ITEMS = [
+  { title: "Dashboard", url: "/dashboard", icon: <LayoutDashboardIcon />, permission: null as string | null },
+  { title: "Hero", url: "/hero", icon: <HomeIcon />, permission: "hero.view" },
+  { title: "About", url: "/about", icon: <InfoIcon />, permission: "about.view" },
+  { title: "Our Works", url: "/our-work", icon: <BriefcaseIcon />, permission: "projects.view" },
+  { title: "Partners", url: "/partners", icon: <UsersIcon />, permission: "partners.view" },
+  { title: "Contact", url: "/contact", icon: <MailIcon />, permission: "contact-inquiries.view" },
+];
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const user = useAuthStore((s) => s.user);
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const load = useAuthStore((s) => s.load);
+  const isLoaded = useAuthStore((s) => s.isLoaded);
+
+  React.useEffect(() => {
+    if (!isLoaded) void load();
+  }, [isLoaded, load]);
+
+  const visibleNav = NAV_ITEMS.filter(
+    (item) => item.permission === null || hasPermission(item.permission),
+  );
+
   return (
     <Sidebar variant="inset" {...props}>
       <SidebarHeader>
@@ -66,7 +73,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
 
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        <NavMain items={visibleNav} />
       </SidebarContent>
 
       <SidebarFooter>
@@ -74,7 +81,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <span className="mb-2 block font-bold text-senja-cyan">Senja CMS</span>
           Shape every digital touchpoint from one focused workspace.
         </div>
-        <NavUser user={data.user} />
+        <NavUser
+          user={{
+            name: user?.name ?? "Senja Admin",
+            email: user?.email ?? "admin@senja.id",
+            avatar: "",
+          }}
+        />
       </SidebarFooter>
     </Sidebar>
   )

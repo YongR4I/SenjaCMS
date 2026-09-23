@@ -1,7 +1,12 @@
+"use client"
+
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import * as React from "react"
 import { ArrowRightIcon, LockKeyholeIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { useAuthStore } from "@/stores/auth-store"
 import { Button } from "@/components/ui/button"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
@@ -10,6 +15,25 @@ export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
+  const router = useRouter()
+  const login = useAuthStore((s) => s.login)
+  const authLoading = useAuthStore((s) => s.isLoading)
+  const [error, setError] = React.useState("")
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setError("")
+
+    const data = new FormData(event.currentTarget)
+    try {
+      await login(String(data.get("email") ?? ""), String(data.get("password") ?? ""))
+      router.push("/dashboard")
+      router.refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login gagal. Pastikan BE online.")
+    }
+  }
+
   return (
     <div
       className={cn("grid min-h-[720px] overflow-hidden rounded-[2rem] bg-white shadow-[0_30px_100px_rgba(18,18,18,0.18)] lg:grid-cols-[0.95fr_1.05fr]", className)}
@@ -24,7 +48,7 @@ export function LoginForm({
           </span>
         </Link>
 
-        <form className="my-12 max-w-md">
+        <form className="my-12 max-w-md" onSubmit={handleSubmit}>
           <div className="mb-9">
             <span className="mb-6 flex size-12 items-center justify-center rounded-2xl bg-secondary">
               <LockKeyholeIcon className="size-5" />
@@ -37,7 +61,7 @@ export function LoginForm({
           <FieldGroup className="gap-5">
             <Field>
               <FieldLabel htmlFor="email">Email address</FieldLabel>
-              <Input id="email" type="email" placeholder="admin@senja.id" required />
+              <Input id="email" name="email" type="email" placeholder="admin@senja.id" required />
             </Field>
             <Field>
               <div className="flex items-center">
@@ -46,10 +70,15 @@ export function LoginForm({
                   Forgot password?
                 </a>
               </div>
-              <Input id="password" type="password" placeholder="Enter your password" required />
+              <Input id="password" name="password" type="password" placeholder="Enter your password" required />
             </Field>
-            <Button type="submit" size="lg" className="mt-2 w-full">
-              Sign in to CMS <ArrowRightIcon />
+            {error ? (
+              <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                {error}
+              </p>
+            ) : null}
+            <Button type="submit" size="lg" className="mt-2 w-full" disabled={authLoading}>
+              {authLoading ? "Signing in…" : "Sign in to CMS"} <ArrowRightIcon />
             </Button>
           </FieldGroup>
         </form>

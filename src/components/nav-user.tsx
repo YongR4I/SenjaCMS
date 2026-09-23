@@ -1,5 +1,6 @@
 "use client"
 
+import { useRouter } from "next/navigation"
 import {
   Avatar,
   AvatarFallback,
@@ -21,6 +22,9 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { ChevronsUpDownIcon, SparklesIcon, BadgeCheckIcon, CreditCardIcon, BellIcon, LogOutIcon } from "lucide-react"
+import { useAuthStore } from "@/stores/auth-store"
+
+const EMPTY_ROLES: string[] = []
 
 export function NavUser({
   user,
@@ -32,6 +36,17 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
+  const router = useRouter()
+  const logout = useAuthStore((s) => s.logout)
+  const userRoles = useAuthStore((s) => s.user?.roles)
+  const roles = userRoles ?? EMPTY_ROLES
+
+  const handleLogout = async () => {
+    await logout()
+    router.push("/login")
+    router.refresh()
+  }
+
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -67,6 +82,11 @@ export function NavUser({
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-medium">{user.name}</span>
                     <span className="truncate text-xs">{user.email}</span>
+                    {roles.length > 0 ? (
+                      <span className="truncate text-[10px] font-bold uppercase tracking-[0.14em] text-senja-cyan">
+                        {roles.join(" · ")}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               </DropdownMenuLabel>
@@ -98,7 +118,7 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => void handleLogout()}>
               <LogOutIcon
               />
               Log out

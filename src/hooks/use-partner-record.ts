@@ -2,39 +2,21 @@
 
 import * as React from "react"
 
-import {
-  getPartnerBySlug,
-  technologyPartners,
-  type TechnologyPartner,
-} from "@/data/partners"
-
-const PARTNERS_STORAGE_KEY = "senja-cms-partners"
+import { usePartnersStore } from "@/stores/partners-store";
 
 export function usePartnerRecord(slug: string) {
-  const [partner, setPartner] = React.useState<TechnologyPartner | undefined>(
-    () => getPartnerBySlug(slug)
-  )
-  const [isLoaded, setIsLoaded] = React.useState(false)
+  const partners = usePartnersStore((s) => s.partners)
+  const isLoaded = usePartnersStore((s) => s.isLoaded)
+  const load = usePartnersStore((s) => s.load)
 
   React.useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      let partners = technologyPartners
-      const storedPartners = window.localStorage.getItem(PARTNERS_STORAGE_KEY)
+    if (!isLoaded) void load()
+  }, [isLoaded, load])
 
-      if (storedPartners) {
-        try {
-          partners = JSON.parse(storedPartners) as TechnologyPartner[]
-        } catch {
-          window.localStorage.removeItem(PARTNERS_STORAGE_KEY)
-        }
-      }
-
-      setPartner(partners.find((item) => item.slug === slug))
-      setIsLoaded(true)
-    })
-
-    return () => window.cancelAnimationFrame(frame)
-  }, [slug])
+  const partner = React.useMemo(
+    () => partners.find((item) => item.slug === slug),
+    [partners, slug],
+  )
 
   return { partner, isLoaded }
 }

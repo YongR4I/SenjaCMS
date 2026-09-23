@@ -32,8 +32,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { technologyPartners, type TechnologyPartner } from "@/data/partners"
+import { usePartnersStore } from "@/stores/partners-store"
 
-const PARTNERS_STORAGE_KEY = "senja-cms-partners"
 const textareaClassName =
   "min-h-32 w-full rounded-xl border border-input bg-white px-3.5 py-3 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/20"
 
@@ -106,7 +106,7 @@ export function PartnerForm({
     setForm((current) => ({ ...current, [field]: value }))
   }
 
-  const savePartner = (event: React.FormEvent<HTMLFormElement>) => {
+  const savePartner = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setIsSaving(true)
 
@@ -118,25 +118,14 @@ export function PartnerForm({
       products: form.products.filter((product) => product.name.trim()),
     }
 
-    let currentPartners = technologyPartners
-    const storedPartners = window.localStorage.getItem(PARTNERS_STORAGE_KEY)
-
-    if (storedPartners) {
-      try {
-        currentPartners = JSON.parse(storedPartners) as TechnologyPartner[]
-      } catch {
-        currentPartners = technologyPartners
-      }
+    try {
+      // zustand partners-store: POST/PUT /partners when authed, cache fallback.
+      await usePartnersStore.getState().savePartner(partner, initialPartner?.slug)
+      router.push(mode === "edit" ? `/partners/${partner.slug}` : "/partners")
+      router.refresh()
+    } finally {
+      setIsSaving(false)
     }
-
-    const originalSlug = initialPartner?.slug ?? partner.slug
-    const nextPartners = [
-      partner,
-      ...currentPartners.filter((item) => item.slug !== originalSlug),
-    ]
-    window.localStorage.setItem(PARTNERS_STORAGE_KEY, JSON.stringify(nextPartners))
-    router.push(mode === "edit" ? `/partners/${partner.slug}` : "/partners")
-    router.refresh()
   }
 
   const openAddGalleryImage = () => {

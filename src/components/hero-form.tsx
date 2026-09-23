@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { HERO_STORAGE_KEY, type HeroContent } from "@/data/hero"
+import { type HeroContent } from "@/data/hero"
+import { useHeroStore } from "@/stores/hero-store"
 
 const textareaClassName =
   "min-h-32 w-full rounded-xl border border-input bg-white px-3.5 py-3 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/20"
@@ -22,12 +23,17 @@ export function HeroForm({ initialContent }: { initialContent: HeroContent }) {
     setForm((current) => ({ ...current, [field]: value }))
   }
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setIsSaving(true)
-    window.localStorage.setItem(HERO_STORAGE_KEY, JSON.stringify(form))
-    router.push("/hero")
-    router.refresh()
+    try {
+      // zustand hero-store: PUT /hero when authed, localStorage offline cache.
+      await useHeroStore.getState().save(form)
+      router.push("/hero")
+      router.refresh()
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (

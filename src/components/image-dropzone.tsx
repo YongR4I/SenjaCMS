@@ -24,6 +24,7 @@ export function ImageDropzone({
   const inputRef = React.useRef<HTMLInputElement>(null)
   const [dragActive, setDragActive] = React.useState(false)
   const [cropSrc, setCropSrc] = React.useState<string | null>(null)
+  const [isUploading, setIsUploading] = React.useState(false)
   const pendingFiles = React.useRef<File[]>([])
 
   const openFile = () => inputRef.current?.click()
@@ -45,8 +46,26 @@ export function ImageDropzone({
     queueFiles(e.dataTransfer.files)
   }
 
-  const handleCropped = (dataUrl: string) => {
-    const next = [...value, dataUrl]
+  const handleCropped = async (dataUrl: string) => {
+    // Prefer Laravel storage (POST /uploads) when authed; else keep local dataURL.
+    let nextSrc = dataUrl
+    try {
+      const { getToken, uploadImageBE } = await import("@/lib/api");
+      if (getToken()) {
+        setIsUploading(true)
+        const res = await fetch(dataUrl)
+        const blob = await res.blob()
+        const file = new File([blob], `senja-${Date.now()}.png`, { type: blob.type || "image/png" })
+        const uploaded = await uploadImageBE(file)
+        if (uploaded.url) nextSrc = uploaded.url
+      }
+    } catch {
+      // offline / upload failed → keep local dataURL so work is not lost
+    } finally {
+      setIsUploading(false)
+    }
+
+    const next = [...value, nextSrc]
     pendingFiles.current = pendingFiles.current.slice(1)
     if (pendingFiles.current.length) {
       const reader = new FileReader()
@@ -159,7 +178,9 @@ export function ImageDropzone({
         )}
       >
         <ImagePlusIcon className="size-8" />
-        <span>Drag & drop images here, or click to browse</span>
+        <span>
+          {isUploading ? "Uploading to Laravel storage…" : "Drag & drop images here, or click to browse"}
+        </span>
       </button>
 
       {cropSrc && (

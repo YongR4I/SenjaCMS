@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import type { ContactInquiry } from "@/data/contact-inquiries"
+import { useContactStore } from "@/stores/contact-store"
 
 const dateFormatter = new Intl.DateTimeFormat("id-ID", {
   dateStyle: "medium",
@@ -24,35 +24,23 @@ const dateFormatter = new Intl.DateTimeFormat("id-ID", {
 })
 
 export default function ContactPage() {
-  const [inquiries, setInquiries] = React.useState<ContactInquiry[]>([])
+  // Laravel-only inbox (zustand contact-store → GET/PATCH/DELETE /contact-inquiries).
+  const inquiries = useContactStore((s) => s.inquiries)
+  const isLoading = useContactStore((s) => s.isLoading)
+  const isStoreLoaded = useContactStore((s) => s.isLoaded)
+  const storeError = useContactStore((s) => s.error)
+  const loadInquiries = useContactStore((s) => s.load)
+  const markRead = useContactStore((s) => s.markRead)
+  const removeFromStore = useContactStore((s) => s.remove)
   const [query, setQuery] = React.useState("")
   const [page, setPage] = React.useState(1)
   const [expandedId, setExpandedId] = React.useState<string | null>(null)
-  const [isLoading, setIsLoading] = React.useState(true)
-  const [error, setError] = React.useState("")
-
-  const loadInquiries = React.useCallback(async () => {
-    setIsLoading(true)
-    setError("")
-
-    try {
-      const response = await fetch("/api/contact-inquiries", { cache: "no-store" })
-      if (!response.ok) throw new Error("Unable to load inquiries.")
-      setInquiries((await response.json()) as ContactInquiry[])
-    } catch {
-      setError("Contact inquiries could not be loaded. Please try again.")
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
+  const [localError, setLocalError] = React.useState("")
+  const error = localError || storeError || ""
 
   React.useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      void loadInquiries()
-    })
-
-    return () => window.cancelAnimationFrame(frame)
-  }, [loadInquiries])
+    if (!isStoreLoaded) void loadInquiries()
+  }, [isStoreLoaded, loadInquiries])
 
   const filteredInquiries = React.useMemo(() => {
     const keyword = query.trim().toLowerCase()
@@ -76,13 +64,19 @@ export default function ContactPage() {
   const removeInquiry = async (id: string) => {
     if (!window.confirm("Delete this contact inquiry?")) return
 
-    const response = await fetch(`/api/contact-inquiries?id=${encodeURIComponent(id)}`, {
-      method: "DELETE",
-    })
-
-    if (response.ok) {
-      setInquiries((current) => current.filter((inquiry) => inquiry.id !== id))
+    try {
+      await removeFromStore(id)
       if (expandedId === id) setExpandedId(null)
+    } catch {
+      setLocalError("Delete gagal. Pastikan kamu punya permission contact-inquiries.delete.")
+    }
+  }
+
+  const toggleRead = async (id: string, next: "new" | "read") => {
+    try {
+      await markRead(id, next)
+    } catch {
+      setLocalError("Update status gagal.")
     }
   }
 
@@ -158,7 +152,13 @@ export default function ContactPage() {
                       {dateFormatter.format(new Date(inquiry.createdAt))}
                     </TableCell>
                     <TableCell>
-                      <Badge className="bg-senja-cyan/15 text-senja-black">{inquiry.status}</Badge>
+                      <button
+                        type="button"
+                        title="Toggle read/new (Laravel)"
+                        onClick={() => void toggleRead(inquiry.id, inquiry.status === "new" ? "read" : "new")}
+                      >
+                        <Badge className="bg-senja-cyan/15 text-senja-black">{inquiry.status}</Badge>
+                      </button>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">

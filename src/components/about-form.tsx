@@ -9,39 +9,39 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
-  ABOUT_STORAGE_KEY,
   defaultAboutContent,
   type AboutContent,
   type AboutImage,
   type AboutItem,
   type AboutStat,
 } from "@/data/about"
+import { useAboutStore } from "@/stores/about-store"
 
 const textareaClassName =
   "min-h-28 w-full rounded-xl border border-input bg-white px-3.5 py-3 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/20"
 
 export function AboutForm() {
+  const storeContent = useAboutStore((s) => s.content)
+  const isStoreLoaded = useAboutStore((s) => s.isLoaded)
+  const storeLoad = useAboutStore((s) => s.load)
   const [form, setForm] = React.useState<AboutContent>(defaultAboutContent)
   const [isLoaded, setIsLoaded] = React.useState(false)
+  const [isSaving, setIsSaving] = React.useState(false)
   const [isSaved, setIsSaved] = React.useState(false)
 
   React.useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      const storedContent = window.localStorage.getItem(ABOUT_STORAGE_KEY)
+    if (!isStoreLoaded) void storeLoad()
+  }, [isStoreLoaded, storeLoad])
 
-      if (storedContent) {
-        try {
-          setForm(JSON.parse(storedContent) as AboutContent)
-        } catch {
-          window.localStorage.removeItem(ABOUT_STORAGE_KEY)
-        }
-      }
-
-      setIsLoaded(true)
-    })
-
-    return () => window.cancelAnimationFrame(frame)
-  }, [])
+  React.useEffect(() => {
+    if (isStoreLoaded) {
+      const frame = window.requestAnimationFrame(() => {
+        setForm(storeContent)
+        setIsLoaded(true)
+      })
+      return () => window.cancelAnimationFrame(frame)
+    }
+  }, [isStoreLoaded, storeContent])
 
   const setSection = <Key extends keyof AboutContent>(
     section: Key,
@@ -51,10 +51,16 @@ export function AboutForm() {
     setIsSaved(false)
   }
 
-  const save = (event: React.FormEvent<HTMLFormElement>) => {
+  const save = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    window.localStorage.setItem(ABOUT_STORAGE_KEY, JSON.stringify(form))
-    setIsSaved(true)
+    setIsSaving(true)
+    try {
+      // zustand about-store: PUT /about when authed, localStorage offline cache.
+      await useAboutStore.getState().save(form)
+      setIsSaved(true)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -67,7 +73,7 @@ export function AboutForm() {
             Manage the complete content displayed on the Senja About page.
           </p>
         </div>
-        <SaveButton isLoaded={isLoaded} isSaved={isSaved} />
+        <SaveButton isLoaded={isLoaded} isSaved={isSaved} isSaving={isSaving} />
       </div>
 
       <Card>
@@ -210,17 +216,17 @@ export function AboutForm() {
       </Card>
 
       <div className="flex justify-end border-t pt-6">
-        <SaveButton isLoaded={isLoaded} isSaved={isSaved} />
+        <SaveButton isLoaded={isLoaded} isSaved={isSaved} isSaving={isSaving} />
       </div>
     </form>
   )
 }
 
-function SaveButton({ isLoaded, isSaved }: { isLoaded: boolean; isSaved: boolean }) {
+function SaveButton({ isLoaded, isSaved, isSaving }: { isLoaded: boolean; isSaved: boolean; isSaving: boolean }) {
   return (
-    <Button type="submit" size="lg" disabled={!isLoaded}>
+    <Button type="submit" size="lg" disabled={!isLoaded || isSaving}>
       {isSaved ? <CheckIcon /> : <SaveIcon />}
-      {isSaved ? "Changes saved" : "Save changes"}
+      {isSaving ? "Saving..." : isSaved ? "Changes saved" : "Save changes"}
     </Button>
   )
 }
@@ -365,3 +371,4 @@ function StringListEditor({ label, values, onChange }: { label: string; values: 
     </div>
   )
 }
+
