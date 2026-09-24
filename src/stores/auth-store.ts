@@ -7,7 +7,6 @@ import {
   login as apiLogin,
   logout as apiLogout,
   refreshTokens,
-  setTokenCookie,
   clearTokens,
 } from "@/lib/api";
 
@@ -62,7 +61,6 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       set({ user: normalizeUser(me as Record<string, unknown>), isLoaded: true });
     } catch (err) {
       clearTokens();
-      setTokenCookie(null);
       set({ error: err instanceof Error ? err.message : "Login gagal.", user: null, isLoaded: true });
       throw err;
     } finally {
@@ -97,7 +95,6 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         }
       }
       clearTokens();
-      setTokenCookie(null);
       set({ user: null, isLoaded: true });
     } finally {
       set({ isLoading: false });

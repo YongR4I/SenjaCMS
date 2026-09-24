@@ -14,6 +14,8 @@ type ImageDropzoneProps = {
   compact?: boolean
 }
 
+const CROP_FRAME_WIDTH = 720
+
 export function ImageDropzone({
   value = [],
   onChange,
@@ -215,6 +217,8 @@ function CropModal({
   const [baseScale, setBaseScale] = React.useState(1)
   const [offset, setOffset] = React.useState({ x: 0, y: 0 })
   const [natural, setNatural] = React.useState({ w: 0, h: 0 })
+  const [displayScale, setDisplayScale] = React.useState(1)
+  const [loadError, setLoadError] = React.useState(false)
   const drag = React.useRef<{
     x: number
     y: number
@@ -223,27 +227,40 @@ function CropModal({
   } | null>(null)
 
   const frame = React.useMemo(() => {
-    if (!natural.w) return { w: 0, h: 0 }
-    const maxW = 720
-    const baseW = Math.min(natural.w, maxW)
-    const baseH = baseW / aspectRatio
-    return { w: baseW, h: baseH }
-  }, [natural, aspectRatio])
+    const baseW = Math.min(CROP_FRAME_WIDTH, 720)
+    return { w: baseW, h: baseW / aspectRatio }
+  }, [aspectRatio])
+
+  React.useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const update = () => {
+      const width = el.getBoundingClientRect().width
+      if (width > 0) setDisplayScale(width / frame.w)
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [frame.w])
 
   const apply = () => {
     const img = imageRef.current
-    if (!img || !frame.w) return
+    if (!img || !natural.w) return
+    const outputW = Math.round(Math.min(natural.w, frame.w))
+    const outputH = Math.round(outputW / aspectRatio)
     const canvas = document.createElement("canvas")
-    canvas.width = frame.w
-    canvas.height = frame.h
+    canvas.width = outputW
+    canvas.height = outputH
     const ctx = canvas.getContext("2d")
     if (!ctx) return
+    const ratio = outputW / frame.w
     ctx.fillStyle = "#fff"
-    ctx.fillRect(0, 0, frame.w, frame.h)
-    const drawW = natural.w * scale
-    const drawH = natural.h * scale
-    const dx = frame.w / 2 + offset.x - drawW / 2
-    const dy = frame.h / 2 + offset.y - drawH / 2
+    ctx.fillRect(0, 0, outputW, outputH)
+    const drawW = natural.w * scale * ratio
+    const drawH = natural.h * scale * ratio
+    const dx = outputW / 2 + offset.x * ratio - drawW / 2
+    const dy = outputH / 2 + offset.y * ratio - drawH / 2
     ctx.drawImage(img, dx, dy, drawW, drawH)
     onApply(canvas.toDataURL("image/png"))
   }
@@ -267,9 +284,10 @@ function CropModal({
   }
   const onPointerMove = (e: React.PointerEvent) => {
     if (!drag.current) return
+    const factor = displayScale || 1
     setOffset({
-      x: drag.current.ox + (e.clientX - drag.current.x),
-      y: drag.current.oy + (e.clientY - drag.current.y),
+      x: drag.current.ox + (e.clientX - drag.current.x) / factor,
+      y: drag.current.oy + (e.clientY - drag.current.y) / factor,
     })
   }
   const onPointerUp = () => {
@@ -304,23 +322,38 @@ function CropModal({
             alt="Crop"
             className="pointer-events-none absolute max-w-none select-none"
             style={{
-              width: natural.w * scale,
-              height: natural.h * scale,
+              width: natural.w * scale * displayScale,
+              height: natural.h * scale * displayScale,
               left: "50%",
               top: "50%",
-              transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))`,
+              transform: `translate(calc(-50% + ${offset.x * displayScale}px), calc(-50% + ${offset.y * displayScale}px))`,
             }}
             onLoad={(e) => {
               const w = e.currentTarget.naturalWidth
               const h = e.currentTarget.naturalHeight
+              if (!w || !h) {
+                setLoadError(true)
+                return
+              }
               const coverScale = Math.max(frame.w / w, frame.h / h)
               setNatural({ w, h })
               setBaseScale(coverScale)
               setScale(coverScale)
               setOffset({ x: 0, y: 0 })
+              setLoadError(false)
             }}
+            onError={() => setLoadError(true)}
             draggable={false}
           />
+
+          {loadError && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-muted/80 p-4 text-center">
+              <p className="text-sm font-medium text-foreground">Image could not be loaded</p>
+              <p className="text-xs text-muted-foreground">
+                The source may be unreachable. Close this dialog and try uploading again.
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="rounded-xl border border-border bg-muted/30 p-3">

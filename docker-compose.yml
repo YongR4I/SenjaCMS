@@ -5,6 +5,8 @@ services:
       dockerfile: Dockerfile
       args:
         PORT: ${PORT:-3000}
+        # Inlined at build time; sourced from .env (NEXT_PUBLIC_API_URL).
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
     image: senja-cms-nextjs:latest
     container_name: senja-cms-nextjs
     restart: unless-stopped

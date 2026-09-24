@@ -7,24 +7,48 @@
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 
-const TOKEN_KEY = "senja-cms-token";
+const TOKEN_COOKIE = "senja_cms_token";
 const REFRESH_KEY = "senja-cms-refresh-token";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(TOKEN_KEY);
+  return readCookie(TOKEN_COOKIE);
+}
+
+export function getRefreshToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(REFRESH_KEY);
+}
+
+function readCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
 }
 
 export function setTokens(access: string | null, refresh: string | null) {
   if (typeof window === "undefined") return;
-  if (access) window.localStorage.setItem(TOKEN_KEY, access);
-  else window.localStorage.removeItem(TOKEN_KEY);
+  if (access) setTokenCookie(access);
+  else clearTokenCookie();
   if (refresh) window.localStorage.setItem(REFRESH_KEY, refresh);
   else window.localStorage.removeItem(REFRESH_KEY);
 }
 
 export function clearTokens() {
   setTokens(null, null);
+}
+
+export function setTokenCookie(token: string | null) {
+  if (typeof document === "undefined") return;
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = token
+    ? `${TOKEN_COOKIE}=${encodeURIComponent(token)}; path=/; max-age=86400; samesite=strict${secure}`
+    : clearTokenCookie();
+}
+
+function clearTokenCookie(): string {
+  if (typeof document === "undefined") return "";
+  return (document.cookie = `${TOKEN_COOKIE}=; path=/; max-age=0; samesite=strict`);
 }
 
 function authHeaders(extra: Record<string, string> = {}) {
@@ -61,7 +85,6 @@ export async function login(email: string, password: string) {
 
   const token = (json as { data?: { token?: { access_token?: string; refresh_token?: string } } })?.data?.token;
   setTokens(token?.access_token ?? null, token?.refresh_token ?? null);
-  setTokenCookie(token?.access_token ?? null);
   return json;
 }
 
@@ -78,7 +101,6 @@ export async function logout() {
     // ignore — clear locally anyway
   }
   clearTokens();
-  setTokenCookie(null);
 }
 
 // --- Generic authed JSON ---
@@ -117,20 +139,6 @@ export async function deleteInquiryBE(id: number | string) {
   await apiSend(`/contact-inquiries/${id}`, "DELETE");
 }
 
-const TOKEN_COOKIE = "senja_cms_token";
-
-export function setTokenCookie(token: string | null) {
-  if (typeof document === "undefined") return;
-  document.cookie = token
-    ? `${TOKEN_COOKIE}=1; path=/; max-age=86400; samesite=lax`
-    : `${TOKEN_COOKIE}=; path=/; max-age=0; samesite=lax`;
-}
-
-export function getRefreshToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(REFRESH_KEY);
-}
-
 /** Passport refresh-token rotation via BE. */
 export async function refreshTokens(): Promise<boolean> {
   const refreshToken = getRefreshToken();
@@ -147,7 +155,6 @@ export async function refreshTokens(): Promise<boolean> {
     const token = json?.data?.token;
     if (token?.access_token) {
       setTokens(token.access_token, token.refresh_token ?? refreshToken);
-      setTokenCookie(token.access_token);
       return true;
     }
     return false;
